@@ -103,7 +103,10 @@ class PointsVisualizer(object):
             x, y = pt_xy
             color_bgr = colors_bgr[j] if colors_bgr is not None else self.color_bgr
             r = rs[j] if rs is not None else self.r
-            cv2.circle(image_bgr, (x, y), r, color_bgr, -1)
+            r = 2
+            # print(r)
+            # exit(0)
+            cv2.circle(image_bgr, (int(x), int(y)), r, color_bgr, -1)
         return image_bgr
 
 

@@ -12,6 +12,7 @@ from torch.utils.data.dataset import Dataset
 from detectron2.config import CfgNode
 from detectron2.data.build import build_detection_test_loader as d2_build_detection_test_loader
 from detectron2.data.build import build_detection_train_loader as d2_build_detection_train_loader
+from detectron2.data.build import build_detection_train_loader_dummy as d2_build_detection_train_loader_dummy #Added 24 June 2022
 from detectron2.data.build import (
     load_proposals_into_dataset,
     print_instances_class_histogram,
@@ -444,6 +445,41 @@ def build_detection_train_loader(cfg: CfgNode, mapper=None):
     if mapper is None:
         mapper = DatasetMapper(cfg, True)
     return d2_build_detection_train_loader(cfg, dataset=dataset_dicts, mapper=mapper)
+
+def build_detection_train_loader_dummy(cfg: CfgNode, mapper=None):
+    """
+    A data loader is created in a way similar to that of Detectron2.
+    The main differences are:
+     - it allows to combine datasets with different but compatible object category sets
+
+    The data loader is created by the following steps:
+    1. Use the dataset names in config to query :class:`DatasetCatalog`, and obtain a list of dicts.
+    2. Start workers to work on the dicts. Each worker will:
+        * Map each metadata dict into another format to be consumed by the model.
+        * Batch them by simply putting dicts into a list.
+    The batched ``list[mapped_dict]`` is what this dataloader will return.
+
+    Args:
+        cfg (CfgNode): the config
+        mapper (callable): a callable which takes a sample (dict) from dataset and
+            returns the format to be consumed by the model.
+            By default it will be `DatasetMapper(cfg, True)`.
+
+    Returns:
+        an infinite iterator of training data
+    """
+
+    _add_category_whitelists_to_metadata(cfg)
+    _add_category_maps_to_metadata(cfg)
+    _maybe_add_class_to_mesh_name_map_to_metadata(cfg.DATASETS.TRAIN_DUMMY, cfg)
+    dataset_dicts = combine_detection_dataset_dicts(
+        cfg.DATASETS.TRAIN_DUMMY,
+        keep_instance_predicate=_get_train_keep_instance_predicate(cfg),
+        proposal_files=cfg.DATASETS.PROPOSAL_FILES_TRAIN if cfg.MODEL.LOAD_PROPOSALS else None,
+    )
+    if mapper is None:
+        mapper = DatasetMapper(cfg, True)
+    return d2_build_detection_train_loader_dummy(cfg, dataset=dataset_dicts, mapper=mapper)
 
 
 def build_detection_test_loader(cfg, dataset_name, mapper=None):

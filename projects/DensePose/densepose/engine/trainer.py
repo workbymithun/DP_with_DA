@@ -29,12 +29,14 @@ from densepose.data import (
     build_combined_loader,
     build_detection_test_loader,
     build_detection_train_loader,
+    build_detection_train_loader_dummy,
     build_inference_based_loaders,
     has_inference_based_loaders,
 )
 from densepose.evaluation import DensePoseCOCOEvaluator
 from densepose.modeling.cse import Embedder
 
+INFER_WITH_PRE_DEF_BBOX_FOR_QUANT = 1
 
 class SampleCountingLoader:
     def __init__(self, loader):
@@ -85,7 +87,9 @@ class Trainer(DefaultTrainer):
     # TODO: the only reason to copy the base class code here is to pass the embedder from
     # the model to the evaluator; that should be refactored to avoid unnecessary copy-pasting
     @classmethod
-    def test(cls, cfg: CfgNode, model: nn.Module, evaluators: List[DatasetEvaluator] = None):
+    #USE this def if INFER_WITH_PRE_DEF_BBOX_FOR_QUANT is set.
+    def test(cls, cfg: CfgNode, model: nn.Module, model_real: nn.Module, evaluators: List[DatasetEvaluator] = None): #function structure changed and added model_real
+    # def test(cls, cfg: CfgNode, model: nn.Module, evaluators: List[DatasetEvaluator] = None):
         """
         Args:
             cfg (CfgNode):
@@ -123,7 +127,10 @@ class Trainer(DefaultTrainer):
                     )
                     results[dataset_name] = {}
                     continue
-            results_i = inference_on_dataset(model, data_loader, evaluator)
+            if INFER_WITH_PRE_DEF_BBOX_FOR_QUANT: #UNCOMMENT THIS SECTION IF INFER_WITH_PRE_DEF_BBOX is set
+                results_i = inference_on_dataset(model, model_real, data_loader, evaluator)
+            # else: #UNCOMMENT THIS SECTION IF INFER_WITH_PRE_DEF_BBOX is not set
+            #     results_i = inference_on_dataset(model, data_loader, evaluator)
             results[dataset_name] = results_i
             if comm.is_main_process():
                 assert isinstance(
@@ -193,6 +200,21 @@ class Trainer(DefaultTrainer):
     @classmethod
     def build_train_loader(cls, cfg: CfgNode):
         data_loader = build_detection_train_loader(cfg, mapper=DatasetMapper(cfg, True))
+        if not has_inference_based_loaders(cfg):
+            return data_loader
+        model = cls.build_model(cfg)
+        model.to(cfg.BOOTSTRAP_MODEL.DEVICE)
+        DetectionCheckpointer(model).resume_or_load(cfg.BOOTSTRAP_MODEL.WEIGHTS, resume=False)
+        inference_based_loaders, ratios = build_inference_based_loaders(cfg, model)
+        loaders = [data_loader] + inference_based_loaders
+        ratios = [1.0] + ratios
+        combined_data_loader = build_combined_loader(cfg, loaders, ratios)
+        sample_counting_loader = SampleCountingLoader(combined_data_loader)
+        return sample_counting_loader
+
+    @classmethod
+    def build_train_loader_dummy(cls, cfg: CfgNode):
+        data_loader = build_detection_train_loader_dummy(cfg, mapper=DatasetMapper(cfg, True))
         if not has_inference_based_loaders(cfg):
             return data_loader
         model = cls.build_model(cfg)

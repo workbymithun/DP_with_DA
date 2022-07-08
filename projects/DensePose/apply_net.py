@@ -37,6 +37,17 @@ from densepose.vis.densepose_results_textures import (
 )
 from densepose.vis.extractor import CompoundExtractor, DensePoseResultExtractor, create_extractor
 
+INFER_WITH_PRE_DEF_BBOX = 1
+from detectron2.checkpoint import DetectionCheckpointer 
+from detectron2.data import (
+    MetadataCatalog,
+    build_detection_test_loader,
+    build_detection_train_loader,
+) 
+from contextlib import contextmanager
+import detectron2.data.transforms as T
+from detectron2.modeling import build_model
+
 DOC = """Apply Net - a tool to print / visualize DensePose results
 """
 
@@ -65,7 +76,19 @@ def register_action(cls: type):
     _ACTION_REGISTRY[cls.COMMAND] = cls
     return cls
 
+@contextmanager
+def inference_context(model):
+    """
+    A context where the model is temporarily changed to eval mode,
+    and restored to previous mode afterwards.
 
+    Args:
+        model: a torch Module
+    """
+    training_mode = model.training
+    model.eval()
+    yield
+    model.train(training_mode)
 class InferenceAction(Action):
     @classmethod
     def add_arguments(cls: type, parser: argparse.ArgumentParser):
@@ -85,8 +108,14 @@ class InferenceAction(Action):
         logger.info(f"Loading config from {args.cfg}")
         opts = []
         cfg = cls.setup_config(args.cfg, args.model, args, opts)
-        logger.info(f"Loading model from {args.model}")
-        predictor = DefaultPredictor(cfg)
+
+        if INFER_WITH_PRE_DEF_BBOX:
+            # cfg_real = cls.setup_config(args.cfg, "model_final_0ed407.pkl", args, opts) #Change model accord real config for test
+            cfg_real = cls.setup_config(args.cfg, "model_0004999.pth", args, opts)
+        else:
+            logger.info(f"Loading model from {args.model}")
+            predictor = DefaultPredictor(cfg)
+            
         logger.info(f"Loading data from {args.input}")
         file_list = cls._get_input_file_list(args.input)
         if len(file_list) == 0:
@@ -95,8 +124,61 @@ class InferenceAction(Action):
         context = cls.create_context(args, cfg)
         for file_name in file_list:
             img = read_image(file_name, format="BGR")  # predictor expects BGR image.
-            with torch.no_grad():
-                outputs = predictor(img)["instances"]
+
+            if INFER_WITH_PRE_DEF_BBOX:
+
+                with torch.no_grad():  # https://github.com/sphinx-doc/sphinx/issues/4258
+                    cfg = cfg.clone()  # cfg can be modified by model
+                    model = build_model(cfg)
+                    model.eval()
+
+                    cfg_real = cfg_real.clone()  # cfg can be modified by model
+                    model_real = build_model(cfg_real)
+                    model_real.eval()
+
+
+                    metadata = MetadataCatalog.get(cfg.DATASETS.TEST[0])
+
+                    checkpointer = DetectionCheckpointer(model)
+                    checkpointer.load(cfg.MODEL.WEIGHTS) #detectron2://ImageNetPretrained/MSRA/R-50.pkl
+
+                    checkpointer_real = DetectionCheckpointer(model_real)
+                    checkpointer_real.load(cfg_real.MODEL.WEIGHTS) #detectron2://ImageNetPretrained/MSRA/R-50.pkl
+                    # checkpointer_real.load(cfg.MODEL.WEIGHTS)
+
+                    
+
+                    aug = T.ResizeShortestEdge([cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST)
+                    
+                    # Apply pre-processing to image.
+                    input_format = cfg.INPUT.FORMAT
+                    if input_format == "RGB":
+                        # whether the model expects BGR inputs or RGB
+                        img = img[:, :, ::-1]
+
+                    height, width = img.shape[:2]
+                    
+                    image = aug.get_transform(img).apply_image(img)
+                    image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
+
+                    inputs = {"image": image, "height": height, "width": width}
+                with inference_context(model_real), torch.no_grad():
+                    outputs_real = model_real.inference([inputs], do_postprocess=False)
+                    # outputs_real = model_real.inference([inputs], do_postprocess=True)
+                    
+                with inference_context(model), torch.no_grad():
+                    outputs = model.inference([inputs],outputs_real, do_postprocess=True)
+                    # outputs = model.inference([inputs],[outputs_real[0]["instances"]], do_postprocess=True)
+                    
+                   
+                outputs = outputs[0]["instances"]
+                cls.execute_on_outputs(context, {"file_name": file_name, "image": img}, outputs)
+            else:
+                with torch.no_grad():
+                    outputs = predictor(img)["instances"]
+
+            # with torch.no_grad():  #Original code
+            #     outputs = predictor(img)["instances"]
                 cls.execute_on_outputs(context, {"file_name": file_name, "image": img}, outputs)
         cls.postexecute(context)
 

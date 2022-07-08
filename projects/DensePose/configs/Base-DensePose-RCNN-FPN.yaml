@@ -36,13 +36,12 @@ MODEL:
     POOLER_TYPE: "ROIAlign"
     NUM_COARSE_SEGM_CHANNELS: 2
 DATASETS:
-  TRAIN: ("densepose_coco_2014_train",)
+  TRAIN: ("densepose_coco_2014_train", ) # "densepose_coco_2014_valminusminival")
+  TRAIN_DUMMY: ("densepose_coco_2014_train", )
   TEST: ("densepose_coco_2014_minival",)
-DATALOADER:
-  NUM_WORKERS: 1
 SOLVER:
-  IMS_PER_BATCH: 16
-  BASE_LR: 0.01
+  IMS_PER_BATCH: 2 #16
+  BASE_LR: 0.0025 #0.01
   STEPS: (60000, 80000)
   MAX_ITER: 90000
   WARMUP_FACTOR: 0.1
