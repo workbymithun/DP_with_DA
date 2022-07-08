@@ -88,6 +88,8 @@ _C.DATASETS = CN()
 # List of the dataset names for training. Must be registered in DatasetCatalog
 # Samples from these datasets will be merged and used as one dataset.
 _C.DATASETS.TRAIN = ()
+
+_C.DATASETS.TRAIN_DUMMY = () # Added extra on 24 June 2022
 # List of the pre-computed proposal files for training, which must be consistent
 # with datasets listed in DATASETS.TRAIN.
 _C.DATASETS.PROPOSAL_FILES_TRAIN = ()

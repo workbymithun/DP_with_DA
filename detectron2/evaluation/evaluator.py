@@ -9,6 +9,7 @@ import torch
 from detectron2.utils.comm import get_world_size, is_main_process
 from detectron2.utils.logger import log_every_n_seconds
 
+INFER_WITH_PRE_DEF_BBOX_FOR_QUANT = 1
 
 class DatasetEvaluator:
     """
@@ -97,8 +98,9 @@ class DatasetEvaluators(DatasetEvaluator):
                     results[k] = v
         return results
 
-
-def inference_on_dataset(model, data_loader, evaluator):
+#USE this def if INFER_WITH_PRE_DEF_BBOX_FOR_QUANT is set.
+def inference_on_dataset(model, model_real, data_loader, evaluator): #function structure changed and added model_real
+# def inference_on_dataset(model, data_loader, evaluator):
     """
     Run model on the data_loader and evaluate the metrics with evaluator.
     Also benchmark the inference speed of `model.forward` accurately.
@@ -131,6 +133,7 @@ def inference_on_dataset(model, data_loader, evaluator):
     num_warmup = min(5, total - 1)
     start_time = time.perf_counter()
     total_compute_time = 0
+    # cntr = 0
     with inference_context(model), torch.no_grad():
         for idx, inputs in enumerate(data_loader):
             if idx == num_warmup:
@@ -138,7 +141,37 @@ def inference_on_dataset(model, data_loader, evaluator):
                 total_compute_time = 0
 
             start_compute_time = time.perf_counter()
-            outputs = model(inputs)
+            
+            if not INFER_WITH_PRE_DEF_BBOX_FOR_QUANT:
+                outputs = model(inputs)
+            else: #UNCOMMENT THIS SECTION IF INFER_WITH_PRE_DEF_BBOX_FOR_QUANT is set
+                with inference_context(model_real), torch.no_grad():
+                    outputs_real = model_real.inference(inputs, do_postprocess=False)
+
+                    # print(outputs_real[0].pred_densepose.coarse_segm)
+                    # print("after")
+                    # print(outputs_real[0].pred_densepose.fine_segm)
+                    # exit(0)
+
+                    with inference_context(model), torch.no_grad():
+                        outputs = model.inference(inputs, outputs_real, do_postprocess=True)
+                # out_pass = list([outputs_real[0]["instances"]])
+                # outputs = model.inference(inputs, outputs_real, do_postprocess=True)
+                # outputs = model.inference(inputs, out_pass)
+                # print(outputs)
+                # exit(0)
+                
+                # print(outputs_real)
+                # # # exit(0)
+                # print("separation")
+                # # # outputs = model.inference(inputs, outputs_real, do_postprocess=True)
+                # # # outputs = model.inference(inputs, outputs_real)
+                # print(outputs)
+                # exit(0)
+                # cntr += 1
+                # if cntr == 2:
+                #     exit(0)
+                
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
             total_compute_time += time.perf_counter() - start_compute_time

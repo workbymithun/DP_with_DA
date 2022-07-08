@@ -25,6 +25,7 @@ from detectron2.data import (
     MetadataCatalog,
     build_detection_test_loader,
     build_detection_train_loader,
+    build_detection_train_loader_dummy #Added extra 24 June 2022
 )
 from detectron2.evaluation import (
     DatasetEvaluator,
@@ -311,13 +312,19 @@ class DefaultTrainer(TrainerBase):
         optimizer = self.build_optimizer(cfg, model)
         data_loader = self.build_train_loader(cfg)
 
+        data_loader_dummy = self.build_train_loader_dummy(cfg) # dummy dataloader for target data train tested 
+
+
+
+        # data_loader_target = self.build_train_loader(cfg)
+
         # For training, wrap with DDP. But don't need this for inference.
         if comm.get_world_size() > 1:
             model = DistributedDataParallel(
                 model, device_ids=[comm.get_local_rank()], broadcast_buffers=False
             )
-        self._trainer = (AMPTrainer if cfg.SOLVER.AMP.ENABLED else SimpleTrainer)(
-            model, data_loader, optimizer
+        self._trainer = (AMPTrainer if cfg.SOLVER.AMP.ENABLED else SimpleTrainer)(   #TODO :- Modify trainer  #Modified to perform DA on 28 July 2022
+            model, data_loader, data_loader_dummy, optimizer
         )
 
         self.scheduler = self.build_lr_scheduler(cfg, optimizer)
@@ -483,6 +490,16 @@ class DefaultTrainer(TrainerBase):
         Overwrite it if you'd like a different data loader.
         """
         return build_detection_train_loader(cfg)
+    @classmethod
+    def build_train_loader_dummy(cls, cfg):
+        """
+        Returns:
+            iterable
+
+        It now calls :func:`detectron2.data.build_detection_train_loader`.
+        Overwrite it if you'd like a different data loader.
+        """
+        return build_detection_train_loader_dummy(cfg)
 
     @classmethod
     def build_test_loader(cls, cfg, dataset_name):

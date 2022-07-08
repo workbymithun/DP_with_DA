@@ -17,8 +17,30 @@ from ..proposal_generator import build_proposal_generator
 from ..roi_heads import build_roi_heads
 from .build import META_ARCH_REGISTRY
 
+#Added extra to view  tensor as img on july 1
+import torchvision.transforms as T
+from PIL import Image
+from torchvision.utils import save_image
+
 __all__ = ["GeneralizedRCNN", "ProposalNetwork"]
 
+class Dim_Reduction(nn.Module):
+
+    def __init__(self):
+        super(Dim_Reduction, self).__init__()
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+
+    def forward(self, x):
+        x = self.avgpool(x)
+        x = x.view(x.size(0), -1)
+
+        return x
+
+def feat_redn():
+    model = Dim_Reduction()
+    return model
+
+    
 
 @META_ARCH_REGISTRY.register()
 class GeneralizedRCNN(nn.Module):
@@ -58,6 +80,8 @@ class GeneralizedRCNN(nn.Module):
         self.backbone = backbone
         self.proposal_generator = proposal_generator
         self.roi_heads = roi_heads
+
+        self.feature_redn_model = feat_redn() #Added extra
 
         self.input_format = input_format
         self.vis_period = vis_period
@@ -122,6 +146,25 @@ class GeneralizedRCNN(nn.Module):
             storage.put_image(vis_name, vis_img)
             break  # only visualize one image in a batch
 
+    def coral(self, source, target):
+        d = source.data.shape[1]
+
+        # print(source.shape)
+        # print(target.shape)
+        # exit(0)
+
+        # source covariance
+        xm = torch.mean(source, 1, keepdim=True) - source
+        xc = torch.matmul(torch.transpose(xm, 0, 1), xm)
+
+        # target covariance
+        xmt = torch.mean(target, 1, keepdim=True) - target
+        xct = torch.matmul(torch.transpose(xmt, 0, 1), xmt)
+        # frobenius norm between source and target
+        loss = torch.mean(torch.mul((xc - xct), (xc - xct)))
+        loss = loss/(4*d*4)
+        return loss
+
     def forward(self, batched_inputs: Tuple[Dict[str, torch.Tensor]]):
         """
         Args:
@@ -145,33 +188,137 @@ class GeneralizedRCNN(nn.Module):
                 The :class:`Instances` object has the following keys:
                 "pred_boxes", "pred_classes", "scores", "pred_masks", "pred_keypoints"
         """
+        
+        batched_inputs_dummy = batched_inputs[0]["data_dummy"] #Added extra on 30 July 2022
+        batched_inputs = batched_inputs[0]["data"] #Added extra on 30 July 2022
+        # print(batched_inputs)
+        # print("in Rcnn")
+        # exit(0)
         if not self.training:
             return self.inference(batched_inputs)
 
         images = self.preprocess_image(batched_inputs)
+
+        images_dummy = self.preprocess_image(batched_inputs_dummy) #Added extra on 30 July 2022
+
         if "instances" in batched_inputs[0]:
             gt_instances = [x["instances"].to(self.device) for x in batched_inputs]
         else:
             gt_instances = None
 
+        if "instances" in batched_inputs_dummy[0]: #Added extra on 30 July 2022
+            gt_instances_dummy = [x["instances"].to(self.device) for x in batched_inputs_dummy] #Added extra on 30 July 2022
+        else: #Added extra on 30 July 2022
+            gt_instances_dummy = None #Added extra on 30 July 2022
+
         features = self.backbone(images.tensor)
+
+        
+
+        # save_image(images_dummy[0], "tar_img_1.png")
+        # save_image(images_dummy[1], "tar_img_2.png")
+
+        # features_src = [features[f] for f in features]
+        # features_src = torch.cat(features_src)
+        # print(len(features_src))
+        # exit(0)
+        # print(self.backbone)
+        # exit(0)
+
+        features_dummy = self.backbone(images_dummy.tensor)
+        # features_tar = [features_dummy[f] for f in features_dummy]
+        # features_tar = torch.cat(features_tar)
+        
+
+        # coral_loss = self.coral(features_src, features_tar)
+        # print(len(features))
+        # print(features_dummy["p6"].shape)
+        # print(features_dummy["p5"].shape)
+        # print(features_dummy["p4"].shape)
+        # print(features_dummy["p3"].shape)
+        
+        features_dummy_p2_dim_changed = self.feature_redn_model(features_dummy["p2"])
+        
+
+        features_p2_dim_changed = self.feature_redn_model(features["p2"])
+
+
+        #Code to sompute overall DA loss for p2,p3,p4,p5 features coming out of FPN starts
+        # features_src = [features[f] for f in features]
+        # features_tar = [features_dummy[f] for f in features_dummy]
+
+        # features_p2_dim_changed_list = [self.feature_redn_model(ele) for ele in features_src]
+        # features_dummy_p2_dim_changed_list = [self.feature_redn_model(ele) for ele in features_tar]
+
+        # # print(features_p2_dim_changed_list[0].shape)
+        # # exit(0)
+        # features_p2_dim_changed_tensor = torch.stack(features_p2_dim_changed_list)
+        # features_dummy_p2_dim_changed_tensor = torch.stack(features_dummy_p2_dim_changed_list) 
+        #Code to sompute overall DA loss for p2,p3,p4,p5 features coming out of FPN ends
+
+        # print(features_p2_dim_changed_tensor.shape)
+        # print(features_dummy_p2_dim_changed_list.shape)
+        # exit(0)
+
+        # print(DA_loss_list)
+        # exit(0)
+
+        # print(features_dummy_p2_dim_changed.shape)
+        # print(features_p2_dim_changed.shape)
+
+        DA_loss = self.coral(features_p2_dim_changed, features_dummy_p2_dim_changed)
+
+        # DA_loss = [ ele for (self.feature_redn_model(org), self.feature_redn_model(dummy)) in enumerate(zip(features, features_dummy)) ]
+
+        DA_loss_formatted = {}
+        DA_loss_formatted["loss_DA"] = DA_loss
+        # print(DA_loss)
+        # exit(0)
+        # exit(0)
+        # print("gap")
+        # print(features["p6"].shape)
+        # print(features["p5"].shape)
+        # print(features["p4"].shape)
+        # print(features["p3"].shape)
+        # print(features["p2"][0][0].shape)
+        # exit(0)
+        # transform = T.ToPILImage()
+        # img = transform(features_dummy["p2"][0])
+        # img.show()
+        # save_image(features_dummy["p2"][0][0], "tar_fpn_feat_p2_of_img_1.png")
+        # save_image(features_dummy["p2"][1][0], "tar_fpn_feat_p2_of_img_2.png")
+        # exit(0)
 
         if self.proposal_generator is not None:
             proposals, proposal_losses = self.proposal_generator(images, features, gt_instances)
+            # proposals_dummy, proposal_losses_dummy = self.proposal_generator(images, features_dummy, gt_instances) #Added extra
         else:
             assert "proposals" in batched_inputs[0]
             proposals = [x["proposals"].to(self.device) for x in batched_inputs]
             proposal_losses = {}
 
-        _, detector_losses = self.roi_heads(images, features, proposals, gt_instances)
+            #Added extra
+            # proposals_dummy = [x["proposals"].to(self.device) for x in batched_inputs_dummy]
+            # proposals_dummy = {}
+        # print(len(proposals))
+        # exit(0)
+        _, detector_losses = self.roi_heads(images, features, proposals, gt_instances) #Original
+        # _, detector_losses = self.roi_heads(images, features, features_dummy, proposals, proposals_dummy, gt_instances, gt_instances_dummy)
         if self.vis_period > 0:
             storage = get_event_storage()
             if storage.iter % self.vis_period == 0:
                 self.visualize_training(batched_inputs, proposals)
 
         losses = {}
+        # print(detector_losses)
+        # exit(0)
         losses.update(detector_losses)
         losses.update(proposal_losses)
+
+        losses.update(DA_loss_formatted) #Added DA loss
+        # print(losses)
+        # exit(0)
+        # print("In rcnn ")
         return losses
 
     def inference(

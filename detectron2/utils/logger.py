@@ -133,7 +133,7 @@ _LOG_COUNTER = Counter()
 _LOG_TIMER = {}
 
 
-def log_first_n(lvl, msg, n=1, *, name=None, key="caller"):
+def log_first_n(lvl, msg, n=2, *, name=None, key="caller"): # modified n=1 to n=2 to adapt multiple loggings of person instances to debug
     """
     Log only for the first n times.
 

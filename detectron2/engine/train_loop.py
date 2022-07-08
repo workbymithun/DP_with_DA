@@ -191,7 +191,7 @@ class SimpleTrainer(TrainerBase):
     or write your own training loop.
     """
 
-    def __init__(self, model, data_loader, optimizer):
+    def __init__(self, model, data_loader, data_loader_dummy, optimizer): #Modified to perform DA on 28 July 2022
         """
         Args:
             model: a torch Module. Takes a data from data_loader and returns a
@@ -214,6 +214,8 @@ class SimpleTrainer(TrainerBase):
         self._data_loader_iter = iter(data_loader)
         self.optimizer = optimizer
 
+        self._data_loader_iter_dummy = iter(data_loader_dummy)
+
     def run_step(self):
         """
         Implement the standard training logic described above.
@@ -224,13 +226,29 @@ class SimpleTrainer(TrainerBase):
         If you want to do something with the data, you can wrap the dataloader.
         """
         data = next(self._data_loader_iter)
+        # print(data)
+        data_dummy = next(self._data_loader_iter_dummy)
+        # print(data_dummy)
+        # exit(0)
+        data_combined = []
+        data_comb_dict = {"data" : data, "data_dummy": data_dummy}
+        data_combined.append(data_comb_dict)
+
         data_time = time.perf_counter() - start
 
         """
         If you want to do something with the losses, you can wrap the model.
         """
-        loss_dict = self.model(data)
+        # print("In train loop beg")
+        # print(data[0])
+        # loss_dict = self.model(data)
+        loss_dict = self.model(data_combined)
         losses = sum(loss_dict.values())
+        # print(dir(self.model.__class__))
+        # print(self.model.__class__)
+        # print(loss_dict)
+        # print("In train loop end")
+        # exit(0)
 
         """
         If you need to accumulate gradients or do something similar, you can
