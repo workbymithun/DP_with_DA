@@ -38,7 +38,7 @@ DATASETS = [
     CocoDatasetInfo(
         name="densepose_coco_2014_train_dummy",
         images_root="coco/train2014",
-        annotations_fpath="coco/annotations/densepose_train2014.json",
+        annotations_fpath="coco/annotations/densepose_train2014_dummy.json",
     ),
     CocoDatasetInfo(
         name="densepose_coco_2014_minival",
