@@ -257,7 +257,7 @@ class GeneralizedRCNN(nn.Module):
         # features_dummy_p2_dim_changed_tensor = torch.stack(features_dummy_p2_dim_changed_list) 
         #Code to sompute overall DA loss for p2,p3,p4,p5 features coming out of FPN ends
         #USE this if loss need to be added from all features coming out of FPN
-        DA_loss = 0
+        DA_loss = 0.5
         for src, tar in zip(features_src_dim_redn, features_tar_dim_redn):
             DA_loss += self.coral(src, tar)
 
