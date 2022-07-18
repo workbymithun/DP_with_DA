@@ -237,24 +237,31 @@ class GeneralizedRCNN(nn.Module):
         # print(features_dummy["p4"].shape)
         # print(features_dummy["p3"].shape)
         
-        features_dummy_p2_dim_changed = self.feature_redn_model(features_dummy["p2"])
-        
+        #USE this if loss need to be computed only for p2 coming out of FPN
+        # features_dummy_p2_dim_changed = self.feature_redn_model(features_dummy["p2"])
+        # features_p2_dim_changed = self.feature_redn_model(features["p2"])
 
-        features_p2_dim_changed = self.feature_redn_model(features["p2"])
+        # features_dummy_stacked = torch.stack([torch.cat(sub_list, dim=0) for sub_list in features_dummy], dim=0)
 
 
         #Code to sompute overall DA loss for p2,p3,p4,p5 features coming out of FPN starts
-        # features_src = [features[f] for f in features]
-        # features_tar = [features_dummy[f] for f in features_dummy]
+        features_src = [features[f] for f in features]
+        features_tar = [features_dummy[f] for f in features_dummy]
 
-        # features_p2_dim_changed_list = [self.feature_redn_model(ele) for ele in features_src]
-        # features_dummy_p2_dim_changed_list = [self.feature_redn_model(ele) for ele in features_tar]
+        features_src_dim_redn = [self.feature_redn_model(ele) for ele in features_src]
+        features_tar_dim_redn = [self.feature_redn_model(ele) for ele in features_tar]
 
         # # print(features_p2_dim_changed_list[0].shape)
         # # exit(0)
         # features_p2_dim_changed_tensor = torch.stack(features_p2_dim_changed_list)
         # features_dummy_p2_dim_changed_tensor = torch.stack(features_dummy_p2_dim_changed_list) 
         #Code to sompute overall DA loss for p2,p3,p4,p5 features coming out of FPN ends
+        #USE this if loss need to be added from all features coming out of FPN
+        DA_loss = 0
+        for src, tar in zip(features_src_dim_redn, features_tar_dim_redn):
+            DA_loss += self.coral(src, tar)
+
+        # exit(0)
 
         # print(features_p2_dim_changed_tensor.shape)
         # print(features_dummy_p2_dim_changed_list.shape)
@@ -265,8 +272,11 @@ class GeneralizedRCNN(nn.Module):
 
         # print(features_dummy_p2_dim_changed.shape)
         # print(features_p2_dim_changed.shape)
-
-        DA_loss = self.coral(features_p2_dim_changed, features_dummy_p2_dim_changed)
+        #USE this if loss need to be computed only for p2 coming out of FPN
+        # DA_loss = 0
+        # DA_loss = self.coral(features_p2_dim_changed, features_dummy_p2_dim_changed)
+        # print(DA_loss)
+        # exit(0)
 
         # DA_loss = [ ele for (self.feature_redn_model(org), self.feature_redn_model(dummy)) in enumerate(zip(features, features_dummy)) ]
 
