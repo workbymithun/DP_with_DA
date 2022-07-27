@@ -21,7 +21,7 @@ from .. import (
     build_densepose_predictor,
     densepose_inference,
 )
-
+from torchvision.utils import save_image
 
 class Decoder(nn.Module):
     """
@@ -144,16 +144,45 @@ class DensePoseROIHeads(StandardROIHeads):
         """
         if not self.densepose_on:
             return {} if self.training else instances
-
+        # print(features_dummy)
+        # exit(0)
         features = [features[f] for f in self.in_features]
+
+        # features_dummy = [features_dummy[f] for f in features_dummy]
+        
         if self.training:
             proposals, _ = select_foreground_proposals(instances, self.num_classes)
             features, proposals = self.densepose_data_filter(features, proposals)
+            # print(proposals)
+            # exit(0)
+            # save_image(features_dummy["p2"][0][0], "tar_fpn_feat_p2_of_img_1.png")
+
+            #Added Extra 
+            # proposals_dummy, __dummy = select_foreground_proposals(instances_dummy, self.num_classes)
+            # features_dummy, proposals_dummy = self.densepose_data_filter(features_dummy, proposals_dummy)
+
+            # print(proposals)
+            # print(proposals_dummy)
+            # exit(0)
+
             if len(proposals) > 0:
                 proposal_boxes = [x.proposal_boxes for x in proposals]
-
+                # print(proposal_boxes)
+                # exit(0)
                 if self.use_decoder:
                     features = [self.decoder(features)]
+                    # print(features[0].shape)
+                    # exit(0)
+                #Added Extra
+                # if len(proposals_dummy) > 0:
+                #     proposal_boxes_dummy = [x.proposal_boxes for x in proposals_dummy]
+                #     # print(proposal_boxes_dummy)
+                #     # exit(0)
+
+                #     if self.use_decoder:
+                #         features_dummy = [self.decoder(features_dummy)]
+                        # print(features_dummy[0].shape)
+                        # exit(0)
 
                 features_dp = self.densepose_pooler(features, proposal_boxes)
                 densepose_head_outputs = self.densepose_head(features_dp)
@@ -181,11 +210,12 @@ class DensePoseROIHeads(StandardROIHeads):
     def forward(
         self,
         images: ImageList,
-        features: Dict[str, torch.Tensor],
-        proposals: List[Instances],
-        targets: Optional[List[Instances]] = None,
+        features: Dict[str, torch.Tensor], features_dummy: Dict[str, torch.Tensor],
+        proposals: List[Instances], proposals_dummy: List[Instances],
+        targets: Optional[List[Instances]] = None, targets_dummy: Optional[List[Instances]] = None,
     ):
-        instances, losses = super().forward(images, features, proposals, targets)
+        instances, losses = super().forward(images, features, features_dummy, proposals, proposals_dummy, targets, targets_dummy)
+        # instances_dummy, losses_dummy = super().forward(images, features_dummy, proposals_dummy, targets_dummy)
         del targets, images
 
         if self.training:

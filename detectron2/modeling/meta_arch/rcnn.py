@@ -245,11 +245,11 @@ class GeneralizedRCNN(nn.Module):
 
 
         #Code to sompute overall DA loss for p2,p3,p4,p5 features coming out of FPN starts
-        features_src = [features[f] for f in features]
-        features_tar = [features_dummy[f] for f in features_dummy]
+        # features_src = [features[f] for f in features]
+        # features_tar = [features_dummy[f] for f in features_dummy]
 
-        features_src_dim_redn = [self.feature_redn_model(ele) for ele in features_src]
-        features_tar_dim_redn = [self.feature_redn_model(ele) for ele in features_tar]
+        # features_src_dim_redn = [self.feature_redn_model(ele) for ele in features_src]
+        # features_tar_dim_redn = [self.feature_redn_model(ele) for ele in features_tar]
 
         # # print(features_p2_dim_changed_list[0].shape)
         # # exit(0)
@@ -257,9 +257,9 @@ class GeneralizedRCNN(nn.Module):
         # features_dummy_p2_dim_changed_tensor = torch.stack(features_dummy_p2_dim_changed_list) 
         #Code to sompute overall DA loss for p2,p3,p4,p5 features coming out of FPN ends
         #USE this if loss need to be added from all features coming out of FPN
-        DA_loss = 0.5
-        for src, tar in zip(features_src_dim_redn, features_tar_dim_redn):
-            DA_loss += self.coral(src, tar)
+        # DA_loss = 0.5
+        # for src, tar in zip(features_src_dim_redn, features_tar_dim_redn):
+        #     DA_loss += self.coral(src, tar)
 
         # exit(0)
 
@@ -280,8 +280,8 @@ class GeneralizedRCNN(nn.Module):
 
         # DA_loss = [ ele for (self.feature_redn_model(org), self.feature_redn_model(dummy)) in enumerate(zip(features, features_dummy)) ]
 
-        DA_loss_formatted = {}
-        DA_loss_formatted["loss_DA"] = DA_loss
+        # DA_loss_formatted = {}
+        # DA_loss_formatted["loss_DA"] = DA_loss
         # print(DA_loss)
         # exit(0)
         # exit(0)
@@ -301,19 +301,19 @@ class GeneralizedRCNN(nn.Module):
 
         if self.proposal_generator is not None:
             proposals, proposal_losses = self.proposal_generator(images, features, gt_instances)
-            # proposals_dummy, proposal_losses_dummy = self.proposal_generator(images, features_dummy, gt_instances) #Added extra
+            proposals_dummy, proposal_losses_dummy = self.proposal_generator(images, features_dummy, gt_instances) #Added extra
         else:
             assert "proposals" in batched_inputs[0]
             proposals = [x["proposals"].to(self.device) for x in batched_inputs]
             proposal_losses = {}
 
-            #Added extra
-            # proposals_dummy = [x["proposals"].to(self.device) for x in batched_inputs_dummy]
-            # proposals_dummy = {}
+            # Added extra
+            proposals_dummy = [x["proposals"].to(self.device) for x in batched_inputs_dummy]
+            proposals_dummy = {}
         # print(len(proposals))
         # exit(0)
-        _, detector_losses = self.roi_heads(images, features, proposals, gt_instances) #Original
-        # _, detector_losses = self.roi_heads(images, features, features_dummy, proposals, proposals_dummy, gt_instances, gt_instances_dummy)
+        # _, detector_losses = self.roi_heads(images, features, proposals, gt_instances) #Original
+        _, detector_losses = self.roi_heads(images, features, features_dummy, proposals, proposals_dummy, gt_instances, gt_instances_dummy)
         if self.vis_period > 0:
             storage = get_event_storage()
             if storage.iter % self.vis_period == 0:
@@ -325,7 +325,7 @@ class GeneralizedRCNN(nn.Module):
         losses.update(detector_losses)
         losses.update(proposal_losses)
 
-        losses.update(DA_loss_formatted) #Added DA loss
+        # losses.update(DA_loss_formatted) #Added DA loss
         # print(losses)
         # exit(0)
         # print("In rcnn ")

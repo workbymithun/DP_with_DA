@@ -22,6 +22,8 @@ from .fast_rcnn import FastRCNNOutputLayers
 from .keypoint_head import build_keypoint_head
 from .mask_head import build_mask_head
 
+from torchvision.utils import save_image #Added Extra
+
 ROI_HEADS_REGISTRY = Registry("ROI_HEADS")
 ROI_HEADS_REGISTRY.__doc__ = """
 Registry for ROI heads in a generalized R-CNN model.
@@ -713,9 +715,9 @@ class StandardROIHeads(ROIHeads):
     def forward(
         self,
         images: ImageList,
-        features: Dict[str, torch.Tensor],
-        proposals: List[Instances],
-        targets: Optional[List[Instances]] = None,
+        features: Dict[str, torch.Tensor], features_dummy: Dict[str, torch.Tensor],
+        proposals: List[Instances], proposals_dummy: List[Instances],
+        targets: Optional[List[Instances]] = None, targets_dummy: Optional[List[Instances]] = None,
     ) -> Tuple[List[Instances], Dict[str, torch.Tensor]]:
         """
         See :class:`ROIHeads.forward`.
@@ -724,10 +726,18 @@ class StandardROIHeads(ROIHeads):
         if self.training:
             assert targets, "'targets' argument is required during training"
             proposals = self.label_and_sample_proposals(proposals, targets)
+            #Added extra
+            assert targets_dummy, "'targets' argument is required during training"
+            proposals_dummy = self.label_and_sample_proposals(proposals_dummy, targets_dummy)
         del targets
+        del targets_dummy #Added Extra
 
         if self.training:
-            losses = self._forward_box(features, proposals)
+            # losses = self._forward_box(features, proposals) # Original
+            losses = self._forward_box(features, features_dummy, proposals, proposals_dummy) #Added Extra
+            # print("roi_heads")
+            # print(losses)
+            # exit(0)
             # Usually the original proposals used by the box head are used by the mask, keypoint
             # heads. But when `self.train_on_pred_boxes is True`, proposals will contain boxes
             # predicted by the box head.
@@ -735,7 +745,8 @@ class StandardROIHeads(ROIHeads):
             losses.update(self._forward_keypoint(features, proposals))
             return proposals, losses
         else:
-            pred_instances = self._forward_box(features, proposals)
+            # pred_instances = self._forward_box(features, proposals) #Original
+            pred_instances = self._forward_box(features, features_dummy, proposals, proposals_dummy) #Added extra to accomodate changes
             # During inference cascaded prediction is used: the mask and keypoints heads are only
             # applied to the top scoring box detections.
             pred_instances = self.forward_with_given_boxes(features, pred_instances)
@@ -768,7 +779,26 @@ class StandardROIHeads(ROIHeads):
         instances = self._forward_keypoint(features, instances)
         return instances
 
-    def _forward_box(self, features: Dict[str, torch.Tensor], proposals: List[Instances]):
+    def coral(self, source, target):
+        d = source.data.shape[1]
+
+        # print(source.shape)
+        # print(target.shape)
+        # exit(0)
+
+        # source covariance
+        xm = torch.mean(source, 1, keepdim=True) - source
+        xc = torch.matmul(torch.transpose(xm, 0, 1), xm)
+
+        # target covariance
+        xmt = torch.mean(target, 1, keepdim=True) - target
+        xct = torch.matmul(torch.transpose(xmt, 0, 1), xmt)
+        # frobenius norm between source and target
+        loss = torch.mean(torch.mul((xc - xct), (xc - xct)))
+        loss = loss/(4*d*4)
+        return loss
+
+    def _forward_box(self, features: Dict[str, torch.Tensor], features_dummy: Dict[str, torch.Tensor], proposals: List[Instances], proposals_dummy: List[Instances]):
         """
         Forward logic of the box prediction branch. If `self.train_on_pred_boxes is True`,
             the function puts predicted boxes in the `proposal_boxes` field of `proposals` argument.
@@ -788,11 +818,35 @@ class StandardROIHeads(ROIHeads):
         features = [features[f] for f in self.box_in_features]
         box_features = self.box_pooler(features, [x.proposal_boxes for x in proposals])
         box_features = self.box_head(box_features)
+
+        #For DA
+        features_dummy = [features_dummy[f] for f in self.box_in_features]
+        box_features_dummy = self.box_pooler(features_dummy, [x.proposal_boxes for x in proposals_dummy])
+        box_features_dummy = self.box_head(box_features_dummy)
+
+        coral_loss = self.coral(box_features, box_features_dummy)
+
+        # save_image(box_features, "box_features_src.png")
+        # print(box_features.shape)
+        # print(box_features_dummy.shape)
+        # print(coral_loss)
+        coral_loss_formatted = {}
+        coral_loss_formatted["loss_coral"] = coral_loss
+        # exit(0)
+
         predictions = self.box_predictor(box_features)
+        # print(predictions[1])
+        # exit(0)
         del box_features
+        del box_features_dummy #Added extra 
 
         if self.training:
             losses = self.box_predictor.losses(predictions, proposals)
+            # print(losses)
+            losses['loss_cls'] = losses['loss_cls'] + coral_loss #Optimising classificaton loss and coral loss together for domain adaptation
+            losses.update(coral_loss_formatted)
+            # print(losses)
+            # exit(0)
             # proposals is modified in-place below, so losses must be computed first.
             if self.train_on_pred_boxes:
                 with torch.no_grad():
