@@ -819,28 +819,33 @@ class StandardROIHeads(ROIHeads):
         box_features = self.box_pooler(features, [x.proposal_boxes for x in proposals])
         box_features = self.box_head(box_features)
 
-        #For DA
-        features_dummy = [features_dummy[f] for f in self.box_in_features]
-        box_features_dummy = self.box_pooler(features_dummy, [x.proposal_boxes for x in proposals_dummy])
-        box_features_dummy = self.box_head(box_features_dummy)
-
-        coral_loss = self.coral(box_features, box_features_dummy)
-
-        # save_image(box_features, "box_features_src.png")
-        # print(box_features.shape)
-        # print(box_features_dummy.shape)
-        # print(coral_loss)
-        coral_loss_formatted = {}
-        coral_loss_formatted["loss_coral"] = coral_loss
+        
         # exit(0)
 
         predictions = self.box_predictor(box_features)
         # print(predictions[1])
         # exit(0)
         del box_features
-        del box_features_dummy #Added extra 
+        
 
         if self.training:
+            #For DA
+            features_dummy = [features_dummy[f] for f in self.box_in_features]
+            box_features_dummy = self.box_pooler(features_dummy, [x.proposal_boxes for x in proposals_dummy])
+            box_features_dummy = self.box_head(box_features_dummy)
+
+            coral_loss = self.coral(box_features, box_features_dummy)
+
+            # save_image(box_features, "box_features_src.png")
+            # print(box_features.shape)
+            # print(box_features_dummy.shape)
+            # print(coral_loss)
+            coral_loss_formatted = {}
+            coral_loss_formatted["loss_coral"] = coral_loss
+
+            del box_features_dummy #Added extra 
+            
+
             losses = self.box_predictor.losses(predictions, proposals)
             # print(losses)
             losses['loss_cls'] = losses['loss_cls'] + coral_loss #Optimising classificaton loss and coral loss together for domain adaptation
