@@ -750,6 +750,7 @@ class StandardROIHeads(ROIHeads):
             # During inference cascaded prediction is used: the mask and keypoints heads are only
             # applied to the top scoring box detections.
             pred_instances = self.forward_with_given_boxes(features, pred_instances)
+            
             return pred_instances, {}
 
     def forward_with_given_boxes(
@@ -815,8 +816,15 @@ class StandardROIHeads(ROIHeads):
             In training, a dict of losses.
             In inference, a list of `Instances`, the predicted instances.
         """
+        # save_image(features_dummy["p2"][1][0], "test_tar_fpn_feat_p2_org.png")
+        # save_image(features["p2"][1][0], "test_tar_fpn_feat_p2_dummy.png")
+        # exit(0)
         features = [features[f] for f in self.box_in_features]
+        # print(features)
+        # exit(0)
         box_features = self.box_pooler(features, [x.proposal_boxes for x in proposals])
+        # print(box_features.shape)
+        # exit(0)
         box_features = self.box_head(box_features)
 
         
@@ -825,12 +833,15 @@ class StandardROIHeads(ROIHeads):
         predictions = self.box_predictor(box_features)
         # print(predictions[1])
         # exit(0)
-        del box_features
+        if not self.training:
+            del box_features
         
 
         if self.training:
             #For DA
             features_dummy = [features_dummy[f] for f in self.box_in_features]
+            
+
             box_features_dummy = self.box_pooler(features_dummy, [x.proposal_boxes for x in proposals_dummy])
             box_features_dummy = self.box_head(box_features_dummy)
 
@@ -844,7 +855,8 @@ class StandardROIHeads(ROIHeads):
             coral_loss_formatted["loss_coral"] = coral_loss
 
             del box_features_dummy #Added extra 
-            
+            del box_features
+
 
             losses = self.box_predictor.losses(predictions, proposals)
             # print(losses)
