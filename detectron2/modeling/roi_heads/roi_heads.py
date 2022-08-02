@@ -747,7 +747,7 @@ class StandardROIHeads(ROIHeads):
             return proposals, losses
         else:
             # pred_instances = self._forward_box(features, proposals) #Original
-            pred_instances = self._forward_box(features, features_dummy, proposals, proposals_dummy) #Added extra to accomodate changes
+            pred_instances = self._forward_box(features, features_dummy, proposals, proposals_dummy, 0.0) #Added extra to accomodate changes
             # During inference cascaded prediction is used: the mask and keypoints heads are only
             # applied to the top scoring box detections.
             pred_instances = self.forward_with_given_boxes(features, pred_instances)
