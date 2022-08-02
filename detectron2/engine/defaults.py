@@ -443,9 +443,9 @@ class DefaultTrainer(TrainerBase):
             verify_results(self.cfg, self._last_eval_results)
             return self._last_eval_results
 
-    def run_step(self):
+    def run_step(self, max_iter):
         self._trainer.iter = self.iter
-        self._trainer.run_step()
+        self._trainer.run_step(self.max_iter)
 
     @classmethod
     def build_model(cls, cfg):
