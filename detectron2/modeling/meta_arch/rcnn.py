@@ -188,12 +188,14 @@ class GeneralizedRCNN(nn.Module):
                 The :class:`Instances` object has the following keys:
                 "pred_boxes", "pred_classes", "scores", "pred_masks", "pred_keypoints"
         """
-        
-        batched_inputs_dummy = batched_inputs[0]["data_dummy"] #Added extra on 30 July 2022
-        batched_inputs = batched_inputs[0]["data"] #Added extra on 30 July 2022
-        # print(batched_inputs)
+        # print(batched_inputs[0])
+        lambd = batched_inputs[0]["lambd"]
         # print("in Rcnn")
         # exit(0)
+        batched_inputs_dummy = batched_inputs[0]["data_dummy"] #Added extra on 30 July 2022
+        batched_inputs = batched_inputs[0]["data"] #Added extra on 30 July 2022
+        # 
+        
         if not self.training:
             return self.inference(batched_inputs)
 
@@ -313,7 +315,7 @@ class GeneralizedRCNN(nn.Module):
         # print(len(proposals))
         # exit(0)
         # _, detector_losses = self.roi_heads(images, features, proposals, gt_instances) #Original
-        _, detector_losses = self.roi_heads(images, features, features_dummy, proposals, proposals_dummy, gt_instances, gt_instances_dummy)
+        _, detector_losses = self.roi_heads(images, features, features_dummy, proposals, proposals_dummy, gt_instances, gt_instances_dummy, lambd)
         if self.vis_period > 0:
             storage = get_event_storage()
             if storage.iter % self.vis_period == 0:

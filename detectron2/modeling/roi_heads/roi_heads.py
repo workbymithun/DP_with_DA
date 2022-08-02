@@ -718,6 +718,7 @@ class StandardROIHeads(ROIHeads):
         features: Dict[str, torch.Tensor], features_dummy: Dict[str, torch.Tensor],
         proposals: List[Instances], proposals_dummy: List[Instances],
         targets: Optional[List[Instances]] = None, targets_dummy: Optional[List[Instances]] = None,
+        lambd : float = None,
     ) -> Tuple[List[Instances], Dict[str, torch.Tensor]]:
         """
         See :class:`ROIHeads.forward`.
@@ -734,7 +735,7 @@ class StandardROIHeads(ROIHeads):
 
         if self.training:
             # losses = self._forward_box(features, proposals) # Original
-            losses = self._forward_box(features, features_dummy, proposals, proposals_dummy) #Added Extra
+            losses = self._forward_box(features, features_dummy, proposals, proposals_dummy, lambd) #Added Extra
             # print("roi_heads")
             # print(losses)
             # exit(0)
@@ -799,7 +800,7 @@ class StandardROIHeads(ROIHeads):
         loss = loss/(4*d*4)
         return loss
 
-    def _forward_box(self, features: Dict[str, torch.Tensor], features_dummy: Dict[str, torch.Tensor], proposals: List[Instances], proposals_dummy: List[Instances]):
+    def _forward_box(self, features: Dict[str, torch.Tensor], features_dummy: Dict[str, torch.Tensor], proposals: List[Instances], proposals_dummy: List[Instances], lambd : float):
         """
         Forward logic of the box prediction branch. If `self.train_on_pred_boxes is True`,
             the function puts predicted boxes in the `proposal_boxes` field of `proposals` argument.
@@ -823,7 +824,8 @@ class StandardROIHeads(ROIHeads):
         # print(features)
         # exit(0)
         box_features = self.box_pooler(features, [x.proposal_boxes for x in proposals])
-        # print(box_features.shape)
+        # box_features_pooled = box_features
+        # print(box_features_pooled.shape)
         # exit(0)
         box_features = self.box_head(box_features)
 
@@ -843,13 +845,18 @@ class StandardROIHeads(ROIHeads):
             
 
             box_features_dummy = self.box_pooler(features_dummy, [x.proposal_boxes for x in proposals_dummy])
+            # box_features_dummy_pooled = box_features_dummy
+            # print(box_features_dummy_pooled.shape)
+            # save_image(box_features_dummy[100][0], "box_features_pooled_tar.png")
             box_features_dummy = self.box_head(box_features_dummy)
 
             coral_loss = self.coral(box_features, box_features_dummy)
 
             # save_image(box_features, "box_features_src.png")
             # print(box_features.shape)
-            # print(box_features_dummy.shape)
+            # print(coral_loss)
+            
+            # exit(0)
             # print(coral_loss)
             coral_loss_formatted = {}
             coral_loss_formatted["loss_coral"] = coral_loss
@@ -860,7 +867,7 @@ class StandardROIHeads(ROIHeads):
 
             losses = self.box_predictor.losses(predictions, proposals)
             # print(losses)
-            losses['loss_cls'] = losses['loss_cls'] + coral_loss #Optimising classificaton loss and coral loss together for domain adaptation
+            losses['loss_cls'] = losses['loss_cls'] + lambd * coral_loss #Optimising classificaton loss and coral loss together for domain adaptation
             losses.update(coral_loss_formatted)
             # print(losses)
             # exit(0)

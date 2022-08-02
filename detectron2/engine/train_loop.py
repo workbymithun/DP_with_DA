@@ -12,6 +12,8 @@ from torch.nn.parallel import DataParallel, DistributedDataParallel
 import detectron2.utils.comm as comm
 from detectron2.utils.events import EventStorage, get_event_storage
 
+import math
+
 __all__ = ["HookBase", "TrainerBase", "SimpleTrainer", "AMPTrainer"]
 
 
@@ -135,7 +137,7 @@ class TrainerBase:
                 self.before_train()
                 for self.iter in range(start_iter, max_iter):
                     self.before_step()
-                    self.run_step()
+                    self.run_step(max_iter)
                     self.after_step()
                 # self.iter == max_iter can be used by `after_train` to
                 # tell whether the training successfully finished or failed
@@ -168,7 +170,7 @@ class TrainerBase:
         for h in self._hooks:
             h.after_step()
 
-    def run_step(self):
+    def run_step(self, max_iter):
         raise NotImplementedError
 
 
@@ -216,7 +218,7 @@ class SimpleTrainer(TrainerBase):
 
         self._data_loader_iter_dummy = iter(data_loader_dummy)
 
-    def run_step(self):
+    def run_step(self, max_iter):
         """
         Implement the standard training logic described above.
         """
@@ -225,14 +227,24 @@ class SimpleTrainer(TrainerBase):
         """
         If you want to do something with the data, you can wrap the dataloader.
         """
+
+        # for index, param_group in enumerate(self.optimizer.param_groups):
+        #     param_group['lr'] = lr[index] / math.pow((1 + 10 * (self.iter - 1) / max_iter), 0.75)
+
         data = next(self._data_loader_iter)
         # print(data)
         data_dummy = next(self._data_loader_iter_dummy)
         # print(data_dummy)
+        # print(self.iter)
+        # print(max_iter)
         # exit(0)
+        lambd = 2 / (1 + math.exp(-10 * (self.iter) / max_iter)) - 1
+
         data_combined = []
-        data_comb_dict = {"data" : data, "data_dummy": data_dummy}
+        data_comb_dict = {"data" : data, "data_dummy": data_dummy, "lambd":lambd}
         data_combined.append(data_comb_dict)
+        # print(data_combined[0]["lambd"])
+        # exit(0)
 
         data_time = time.perf_counter() - start
 
@@ -242,8 +254,9 @@ class SimpleTrainer(TrainerBase):
         # print("In train loop beg")
         # print(data[0])
         # loss_dict = self.model(data)
-        loss_dict = self.model(data_combined)
-        losses = sum(loss_dict.values())
+        #Original Commented
+        # loss_dict = self.model(data_combined)
+        # losses = sum(loss_dict.values())
         # print(dir(self.model.__class__))
         # print(self.model.__class__)
         # print(loss_dict)
@@ -255,6 +268,11 @@ class SimpleTrainer(TrainerBase):
         wrap the optimizer with your custom `zero_grad()` method.
         """
         self.optimizer.zero_grad()
+
+        #Added Extra 
+        loss_dict = self.model(data_combined)
+        losses = sum(loss_dict.values())
+
         losses.backward()
 
         self._write_metrics(loss_dict, data_time)

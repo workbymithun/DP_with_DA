@@ -212,9 +212,12 @@ class DensePoseROIHeads(StandardROIHeads):
         images: ImageList,
         features: Dict[str, torch.Tensor], features_dummy: Dict[str, torch.Tensor],
         proposals: List[Instances], proposals_dummy: List[Instances],
-        targets: Optional[List[Instances]] = None, targets_dummy: Optional[List[Instances]] = None,
+        targets: Optional[List[Instances]] = None, targets_dummy: Optional[List[Instances]] = None, 
+        lambd : float = None,
     ):
-        instances, losses = super().forward(images, features, features_dummy, proposals, proposals_dummy, targets, targets_dummy)
+        # print(lambd)
+        # exit(0)
+        instances, losses = super().forward(images, features, features_dummy, proposals, proposals_dummy, targets, targets_dummy, lambd)
         # instances_dummy, losses_dummy = super().forward(images, features_dummy, proposals_dummy, targets_dummy)
         del targets, images
 
