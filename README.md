@@ -1,1 +1,1 @@
-# DP_with_DA
+# DensePose_with_DomainAdaptation
